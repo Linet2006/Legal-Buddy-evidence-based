@@ -1,14 +1,28 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import multer from "multer";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkDocument, retrieveRelevantChunks } from "./chunker.js";
-import { SYSTEM_PROMPT, buildUserPrompt, buildOverviewPrompt } from "./systemPrompt.js";
+import { SYSTEM_PROMPT, buildUserPrompt, buildOverviewPrompt, buildSimplifyPrompt } from "./systemPrompt.js";
 
 const app = express();
+
+// Security: Helmet adds secure HTTP headers (e.g. anti-XSS, anti-clickjacking)
+app.use(helmet());
+
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+
+// Security: Rate limiting to prevent brute-force or DoS attacks
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: "Too many requests from this IP, please try again later." }
+});
+app.use("/api/", limiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -72,10 +86,19 @@ async function callModel(userPrompt) {
     throw new Error(`OpenRouter request failed (${response.status}): ${errBody.slice(0, 300)}`);
   }
 
-  const data = await response.json();
-  const rawText = data.choices?.[0]?.message?.content;
+  let rawText = "";
+  try {
+    const responseText = await response.text();
+    const data = JSON.parse(responseText);
+    rawText = data.choices?.[0]?.message?.content;
+  } catch (parseErr) {
+    throw new Error(
+      "The free AI server (OpenRouter) returned an empty or invalid response. This happens when their servers are overloaded. Please click the button to try again."
+    );
+  }
+
   if (!rawText) {
-    throw new Error("OpenRouter returned no content. Try a different OPENROUTER_MODEL.");
+    throw new Error("OpenRouter returned no content. Please try again.");
   }
 
   return parseModelJson(rawText);
@@ -93,9 +116,25 @@ function parseModelJson(rawText) {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(
-      "The model's response wasn't in the expected format. This can happen with some free models — try again, or pin OPENROUTER_MODEL in .env to a specific model instead of openrouter/free."
-    );
+    // Free models often fail to output strict JSON. Instead of crashing,
+    // gracefully wrap whatever text they did output into our expected shape!
+    console.warn("Failed to parse JSON, returning raw text as fallback.");
+    let fallbackText = rawText.replace(/^```json/i, "").replace(/```/g, "").trim();
+    
+    // If the model dumped a safety rating or generic error instead of an answer
+    if (fallbackText.toLowerCase().includes("user safety") || fallbackText.toLowerCase().includes("i cannot answer")) {
+      fallbackText = "This information is not provided in the document.";
+    }
+
+    return {
+      answer: fallbackText,
+      evidence: [],
+      whatItMeans: fallbackText === "This information is not provided in the document." 
+        ? "The AI correctly identified that this topic is missing." 
+        : "Note: The free AI model struggled to format this answer correctly, but the raw text is shown above.",
+      limitations: "",
+      verify: "Please verify by reading the document directly."
+    };
   }
 }
 
@@ -219,6 +258,8 @@ function normalizeOverview(raw) {
     })),
     missingOrUnclear: toStringArray(raw?.missingOrUnclear),
     checklist: toStringArray(raw?.checklist),
+    riskScore: typeof raw?.riskScore === "number" ? raw.riskScore : null,
+    riskExplanation: raw?.riskExplanation || "",
   };
 }
 
@@ -251,6 +292,26 @@ app.post("/api/chat", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Failed to generate a response." });
+  }
+});
+
+// ---- Simplify -----------------------------------------------------------
+
+app.post("/api/simplify", async (req, res) => {
+  try {
+    const { text, language } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Text is required to simplify." });
+    }
+    
+    // We don't necessarily need a session ID here, it's just raw text to simplify
+    const prompt = buildSimplifyPrompt({ text, language });
+    const parsed = await callModel(prompt);
+    
+    res.json(parsed);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message || "Failed to simplify text." });
   }
 });
 

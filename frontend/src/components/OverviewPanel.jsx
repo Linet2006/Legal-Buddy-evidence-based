@@ -40,6 +40,21 @@ export default function OverviewPanel({ overview, loading, error, onJump }) {
         <MetaItem label="Duration" value={overview.duration} />
       </div>
 
+      {overview.riskScore !== null && (
+        <div className="overview-section risk-section">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+            <h3 style={{ margin: 0, display: "flex", alignItems: "center" }}>
+              <AlertTriangle size={18} style={{ marginRight: 8, color: overview.riskScore > 6 ? "#ef4444" : (overview.riskScore > 3 ? "#f59e0b" : "#22c55e") }} />
+              Overall Risk Score
+            </h3>
+            <span style={{ fontSize: "24px", fontWeight: "bold", color: overview.riskScore > 6 ? "#ef4444" : (overview.riskScore > 3 ? "#f59e0b" : "#22c55e") }}>
+              {overview.riskScore} / 10
+            </span>
+          </div>
+          {overview.riskExplanation && <p style={{ margin: 0, color: "var(--text-light)" }}>{overview.riskExplanation}</p>}
+        </div>
+      )}
+
       <EvidenceGroup title="Key obligations" items={overview.keyObligations} onJump={onJump} />
       <EvidenceGroup title="Payment terms" items={overview.paymentTerms} onJump={onJump} />
       <EvidenceGroup title="Termination" items={overview.termination} onJump={onJump} />
@@ -49,7 +64,7 @@ export default function OverviewPanel({ overview, loading, error, onJump }) {
 
       {asArray(overview.provisionsRequiringAttention).length > 0 && (
         <div className="overview-section">
-          <h3><AlertTriangle size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} aria-hidden="true" />Provisions requiring attention</h3>
+          <h3><AlertTriangle size={13} style={{ verticalAlign: "-2px", marginRight: 5 }} aria-hidden="true" />Risk Scanner & Red Flags</h3>
           {asArray(overview.provisionsRequiringAttention).map((item, i) => (
             <div className="attention-card" key={i}>
               <div className="attention-card-title">{item.provision}</div>
