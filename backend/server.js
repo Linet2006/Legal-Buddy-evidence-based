@@ -109,15 +109,22 @@ async function callModel(userPrompt) {
   try {
     const responseText = await response.text();
     const data = JSON.parse(responseText);
+    
+    if (data.error) {
+      throw new Error(`OpenRouter API Error: ${data.error.message || JSON.stringify(data.error)}`);
+    }
+    
     rawText = data.choices?.[0]?.message?.content;
   } catch (parseErr) {
     throw new Error(
-      "The free AI server (OpenRouter) returned an empty or invalid response. This happens when their servers are overloaded. Please click the button to try again."
+      parseErr.message.includes("OpenRouter API Error") 
+        ? parseErr.message 
+        : "The free AI server (OpenRouter) returned an empty or invalid response. This happens when their servers are overloaded. Please click the button to try again."
     );
   }
 
   if (!rawText) {
-    throw new Error("OpenRouter returned no content. Please try again.");
+    throw new Error("OpenRouter returned an empty response. Please try clicking the tab again.");
   }
 
   return parseModelJson(rawText);
