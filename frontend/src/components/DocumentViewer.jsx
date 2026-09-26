@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, BookOpen } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 /**
  * Renders the document page by page. `jumpTarget` is
  * { page, excerpt } set when the user clicks a citation elsewhere in the
@@ -54,7 +56,7 @@ export default function DocumentViewer({ fileName, pages, jumpTarget }) {
     setLoading(true);
     setExplanation(null);
     try {
-      const res = await fetch("/api/simplify", {
+      const res = await fetch(`${API_BASE}/api/simplify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: selection.text, language: document.getElementById('lang-select')?.value || 'English' })

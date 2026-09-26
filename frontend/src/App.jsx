@@ -14,6 +14,8 @@ const LANGUAGES = [
   { code: "Telugu", label: "తెలుగు" },
 ];
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function App() {
   const [session, setSession] = useState(null); // { sessionId, fileName, pages }
   const [uploading, setUploading] = useState(false);
@@ -49,11 +51,11 @@ export default function App() {
     try {
       const form = new FormData();
       form.append("document", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed.");
 
-      const docRes = await fetch(`/api/document/${data.sessionId}`);
+      const docRes = await fetch(`${API_BASE}/api/document/${data.sessionId}`);
       const docData = await docRes.json();
 
       setSession({ sessionId: data.sessionId, fileName: data.fileName, pages: docData.pages });
@@ -69,7 +71,7 @@ export default function App() {
     setOverviewLoading(true);
     setOverviewError(null);
     try {
-      const res = await fetch("/api/overview", {
+      const res = await fetch(`${API_BASE}/api/overview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, language }),
@@ -88,7 +90,7 @@ export default function App() {
     setChatTurns((t) => [...t, { role: "question", text: question }]);
     setChatLoading(true);
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: session.sessionId, question, language }),
