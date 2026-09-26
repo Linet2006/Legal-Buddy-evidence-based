@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, BookOpen } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
  * text so a citation is something the user can actually go verify,
  * not just a printed page number.
  */
-export default function DocumentViewer({ fileName, pages, jumpTarget }) {
+const DocumentViewer = React.memo(function DocumentViewer({ fileName, pages, jumpTarget }) {
   const pageRefs = useRef({});
   const [selection, setSelection] = useState(null);
   const [explanation, setExplanation] = useState(null);
@@ -162,7 +162,9 @@ export default function DocumentViewer({ fileName, pages, jumpTarget }) {
       )}
     </div>
   );
-}
+});
+
+export default DocumentViewer;
 
 function renderPageText(text, highlight) {
   if (!highlight) return text;
