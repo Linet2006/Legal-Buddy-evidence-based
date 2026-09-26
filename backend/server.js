@@ -1,6 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import multer from "multer";
@@ -328,6 +333,13 @@ app.get("/api/document/:sessionId", (req, res) => {
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, openRouterConfigured: Boolean(OPENROUTER_API_KEY), model: OPENROUTER_MODEL });
+});
+
+// Serve frontend in production
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
 const PORT = process.env.PORT || 5000;
