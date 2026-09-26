@@ -8,12 +8,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import compression from "compression";
 import multer from "multer";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkDocument, retrieveRelevantChunks } from "./chunker.js";
 import { SYSTEM_PROMPT, buildUserPrompt, buildOverviewPrompt, buildSimplifyPrompt } from "./systemPrompt.js";
 
 const app = express();
+
+// Efficiency: Compress response bodies to reduce payload size
+app.use(compression());
 
 // Security: Helmet adds secure HTTP headers (e.g. anti-XSS, anti-clickjacking)
 app.use(helmet());
@@ -41,9 +45,19 @@ const upload = multer({
   },
 });
 
-// In-memory session store. Fine for a hackathon prototype; swap for a
-// real DB before this handles more than one demo at a time.
+// In-memory session store.
 const sessions = new Map();
+
+// Efficiency/Memory Management: Clean up old sessions every hour to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 2 * 60 * 60 * 1000; // 2 hours
+  for (const [id, session] of sessions.entries()) {
+    if (now - session.createdAt > maxAge) {
+      sessions.delete(id);
+    }
+  }
+}, 60 * 60 * 1000);
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openrouter/free";
