@@ -22,8 +22,13 @@ app.use(compression());
 // Security: Helmet adds secure HTTP headers (e.g. anti-XSS, anti-clickjacking)
 app.use(helmet());
 
-app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.disable("x-powered-by"); // Security: Hide Express header
+
+// Security: Strict CORS policy
+app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
+
+// Efficiency/Security: Strict JSON payload limit
+app.use(express.json({ limit: "1mb" }));
 
 // Security: Rate limiting to prevent brute-force or DoS attacks
 const limiter = rateLimit({
@@ -47,6 +52,8 @@ const upload = multer({
 
 // In-memory session store.
 const sessions = new Map();
+// Efficiency: Cache expensive LLM overviews to avoid redundant API calls
+const overviewCache = new Map();
 
 // Efficiency/Memory Management: Clean up old sessions every hour to prevent memory leaks
 setInterval(() => {
@@ -55,6 +62,7 @@ setInterval(() => {
   for (const [id, session] of sessions.entries()) {
     if (now - session.createdAt > maxAge) {
       sessions.delete(id);
+      overviewCache.delete(id); // Clear associated cache
     }
   }
 }, 60 * 60 * 1000);
@@ -228,12 +236,19 @@ app.post("/api/overview", async (req, res) => {
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).json({ error: "Session not found. Upload the document again." });
 
+    // Efficiency: Return cached overview if it exists to save API tokens and time
+    if (overviewCache.has(sessionId)) {
+      return res.json(overviewCache.get(sessionId));
+    }
+
     // Use a broad sample of chunks for the overview (first N + evenly spaced).
     const chunks = sampleChunksForOverview(session.chunks);
     const prompt = buildOverviewPrompt({ chunks, language });
     const parsed = await callModel(prompt);
 
-    res.json(normalizeOverview(parsed));
+    const normalized = normalizeOverview(parsed);
+    overviewCache.set(sessionId, normalized); // Save to cache
+    res.json(normalized);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || "Failed to generate overview." });
